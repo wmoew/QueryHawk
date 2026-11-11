@@ -1,20 +1,7 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import { pool } from '../db/db';
 import { GithubUser, DbUser } from '../types/auth.js';
 
-// Initialize pool with Supabase configuration
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // Required for Supabase connections
-  },
-});
-
-// Add connection error handling
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
-});
+// Shares the app database pool (server/db/db.ts) instead of opening a second one.
 
 export class OAuthModel {
   async findOrCreateUser(githubUser: GithubUser): Promise<DbUser> {
@@ -150,7 +137,6 @@ export class OAuthModel {
         'SELECT * FROM user_account WHERE github_id = $1 OR email = $2',
         [githubUser.id.toString(), githubUser.email]
       );
-      console.log('✅ Find result:', findResult.rows);
 
       if (findResult.rows[0]) {
         // Update existing user's information

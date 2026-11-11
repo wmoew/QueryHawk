@@ -60,7 +60,6 @@ services: # This section defines all the services (containers) we want to run
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - CORS_ORIGIN=http://localhost:5173
       - JWT_SECRET=${JWT_SECRET}
-      - SUPABASE_URI=${SUPABASE_URI}
       - NODE_ENV=development
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:14318/v1/traces # OTLP HTTP endpoint for Grafana Alloy
       - OTEL_SERVICE_NAME=queryhawk-backend
@@ -147,6 +146,7 @@ services: # This section defines all the services (containers) we want to run
       - mimir
       - loki
       - grafana
+      - jaeger # traces are forwarded to Jaeger over OTLP gRPC
     networks:
       - queryhawk_monitoring_network
     deploy:

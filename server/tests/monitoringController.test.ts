@@ -8,19 +8,24 @@ const poolInstances: Array<{
 }> = [];
 type PoolBehavior =
   | { type: 'resolve'; value?: { rows?: unknown[] } | unknown }
-  | { type: 'reject'; value?: unknown };
+  | { type: 'reject'; value?: unknown }
+  | { type: 'impl'; value: (sql: string) => unknown };
 
 const poolBehaviorQueue: PoolBehavior[] = [];
 
 vi.mock('pg', () => {
   class Pool {
     query = vi.fn();
-    end = vi.fn();
+    end = vi.fn().mockResolvedValue(undefined);
     on = vi.fn();
 
     constructor() {
       const behavior = poolBehaviorQueue.shift();
-      if (behavior?.type === 'reject') {
+      if (behavior?.type === 'impl') {
+        this.query.mockImplementation(async (sql: string) =>
+          behavior.value(sql),
+        );
+      } else if (behavior?.type === 'reject') {
         this.query.mockRejectedValue(behavior.value ?? new Error('db error'));
       } else if (behavior?.type === 'resolve') {
         this.query.mockResolvedValue(behavior.value ?? { rows: [] });
@@ -38,8 +43,13 @@ vi.mock('prom-client', () => {
     constructor() {}
   }
   class Gauge {
+    static instances: Gauge[] = [];
     set = vi.fn();
-    constructor() {}
+    name: string;
+    constructor(opts: { name: string }) {
+      this.name = opts.name;
+      Gauge.instances.push(this);
+    }
   }
   const register = {
     contentType: 'text/plain',
@@ -49,8 +59,9 @@ vi.mock('prom-client', () => {
   return { Counter, Gauge, register };
 });
 
-const createRes = (): Response => {
+const createRes = (userId?: number): Response => {
   const res = {
+    locals: { userId },
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
@@ -74,20 +85,114 @@ describe('monitoringController', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns 400 when required fields are missing', async () => {
+  it('returns 401 when there is no authenticated user', async () => {
+    const { setupMonitoring } =
+      await import('../controllers/monitoringController');
+    // userId in the body must never be trusted
+    const req = {
+      body: { userId: '42', databaseUrl: 'postgres://user:pass@host/db' },
+    } as Request;
+    const res = createRes();
+
+    await setupMonitoring(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('returns 400 when databaseUrl is missing', async () => {
     const { setupMonitoring } =
       await import('../controllers/monitoringController');
     const req = { body: {} } as Request;
-    const res = createRes();
+    const res = createRes(42);
 
     await setupMonitoring(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: 'userId and databaseUrl are required',
-        message: 'userId and databaseUrl are required',
+        error: 'databaseUrl is required',
+        message: 'databaseUrl is required',
       }),
+    );
+  });
+
+  it('stores the connection for the JWT user, not a userId from the body', async () => {
+    const { setupMonitoring } =
+      await import('../controllers/monitoringController');
+    const req = {
+      body: { userId: '999', databaseUrl: 'postgres://user:pass@host/db' },
+    } as Request;
+    const res = createRes(42);
+
+    await setupMonitoring(req, res);
+
+    const appPool = poolInstances[0];
+    const upsert = appPool.query.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO user_connections'),
+    );
+    expect(upsert?.[1]).toEqual([42, 'postgres://user:pass@host/db']);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('sets cumulative pg_stat_database values instead of adding them', async () => {
+    poolBehaviorQueue.push({ type: 'resolve', value: { rows: [] } }); // app pool
+    poolBehaviorQueue.push({
+      type: 'impl',
+      value: (sql: string) => {
+        if (sql.includes('current_database'))
+          return { rows: [{ datname: 'app' }] };
+        if (sql.includes('pg_stat_database')) {
+          // node-postgres returns bigint columns as strings
+          return {
+            rows: [
+              {
+                numbackends: 3,
+                xact_commit: '1000',
+                blks_hit: '90',
+                blks_read: '10',
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+    const { setupMonitoring } =
+      await import('../controllers/monitoringController');
+    const req = {
+      body: { databaseUrl: 'postgres://user:pass@host:6543/db' },
+    } as Request;
+    const res = createRes(7);
+
+    await setupMonitoring(req, res);
+
+    const { Gauge } = await import('prom-client');
+    const gauges = (
+      Gauge as unknown as {
+        instances: Array<{ name: string; set: ReturnType<typeof vi.fn> }>;
+      }
+    ).instances;
+    const byName = (name: string) =>
+      gauges.filter((g) => g.name === name).at(-1)!; // newest module instance
+    const labels = { datname: 'app', user_id: '7', instance: 'host:6543' };
+
+    expect(byName('pg_stat_database_xact_commit').set).toHaveBeenCalledWith(
+      labels,
+      1000,
+    );
+    expect(byName('pg_stat_database_numbackends').set).toHaveBeenCalledWith(
+      labels,
+      3,
+    );
+    expect(byName('pg_stat_database_cache_hit_ratio').set).toHaveBeenCalledWith(
+      labels,
+      90,
+    );
+    expect(byName('pg_up').set).toHaveBeenCalledWith(
+      { user_id: '7', instance: 'host:6543' },
+      1,
     );
   });
 
@@ -98,9 +203,9 @@ describe('monitoringController', () => {
     const { setupMonitoring } =
       await import('../controllers/monitoringController');
     const req = {
-      body: { userId: '42', databaseUrl: 'postgres://user:pass@host/db' },
+      body: { databaseUrl: 'postgres://user:pass@host/db' },
     } as Request;
-    const res = createRes();
+    const res = createRes(42);
 
     await setupMonitoring(req, res);
 

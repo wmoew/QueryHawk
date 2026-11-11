@@ -27,6 +27,8 @@ describe('db pool', () => {
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
     delete process.env.DATABASE_SSL;
     delete process.env.NODE_ENV;
+    delete process.env.PG_SSL_REJECT_UNAUTHORIZED;
+    delete process.env.PG_SSL_CA;
   });
 
   afterEach(() => {
@@ -53,7 +55,34 @@ describe('db pool', () => {
 
     expect(poolCtor).toHaveBeenCalledWith(
       expect.objectContaining({
+        ssl: { rejectUnauthorized: true },
+      }),
+    );
+  });
+
+  it('verifies certificates unless PG_SSL_REJECT_UNAUTHORIZED=false', async () => {
+    process.env.DATABASE_SSL = 'true';
+    process.env.PG_SSL_REJECT_UNAUTHORIZED = 'false';
+    await import('../db/db');
+
+    expect(poolCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
         ssl: { rejectUnauthorized: false },
+      }),
+    );
+  });
+
+  it('passes PG_SSL_CA through as the trusted CA', async () => {
+    process.env.DATABASE_SSL = 'true';
+    process.env.PG_SSL_CA = '-----BEGIN CERTIFICATE-----\\nabc';
+    await import('../db/db');
+
+    expect(poolCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ssl: {
+          rejectUnauthorized: true,
+          ca: '-----BEGIN CERTIFICATE-----\nabc',
+        },
       }),
     );
   });
