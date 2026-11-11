@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Generated per-user monitoring targets (contain database hosts/usernames)
+grafana-alloy/targets/user-*.json

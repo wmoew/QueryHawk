@@ -6,6 +6,7 @@ import {
   ServiceError,
 } from '../services/queryAnalysisService';
 import { pool as appDbPool } from '../db/db';
+import { userDbSsl } from '../db/ssl';
 
 // Consistent HTTP error responses for this controller
 const sendErrorResponse = (
@@ -62,9 +63,7 @@ const userDatabaseController: UserDatabaseController = {
       console.log('Connecting to users database...');
       const userDBPool = new Pool({
         connectionString: uri_string,
-        ssl: {
-          rejectUnauthorized: false, // Required for Supabase connections
-        },
+        ssl: userDbSsl(),
       });
 
       const result = await userDBPool.query(buildExplainAnalyzeQuery(query));

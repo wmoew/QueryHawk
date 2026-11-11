@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import pg from 'pg';
+import { userDbSsl } from './ssl';
 
 const { Pool } = pg;
 
@@ -17,7 +18,7 @@ const pool = new Pool({
   max: Number(process.env.DB_POOL_MAX || 10),
   idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_MS || 10000),
   connectionTimeoutMillis: Number(process.env.DB_POOL_CONN_TIMEOUT_MS || 2000),
-  ssl: shouldUseSsl ? { rejectUnauthorized: false } : undefined,
+  ssl: shouldUseSsl ? userDbSsl() : undefined,
 });
 
 pool.on('error', (error) => {

@@ -107,31 +107,9 @@ const QueryMonitor: React.FC = () => {
         throw new Error(data.message || 'Failed to connect to database');
       }
 
+      // The backend tests the connection, saves it, and starts collecting
+      // metrics for the logged-in user (taken from the JWT) in this one call.
       await response.json();
-
-      const monitoringResponse = await fetch(
-        'http://localhost:4002/api/connect',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            databaseUrl: dbUrl,
-            userId: userId,
-          }),
-        }
-      );
-      if (!monitoringResponse.ok) {
-        // If monitoring setup fails, we still have internal monitoring, so just log a warning
-        console.warn(
-          'Monitoring setup failed, but database connection is still active'
-        );
-      } else {
-        const monitoringData = await monitoringResponse.json();
-        console.log('Monitoring setup successful:', monitoringData);
-      }
 
       // Add a small delay to allow metrics to be collected
       await new Promise((resolve) => setTimeout(resolve, 2000));

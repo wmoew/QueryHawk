@@ -16,11 +16,10 @@ app.use(
 );
 app.use(express.json());
 
-//debugging
-app.use((req, res, next) => {
+// Request logging. Only the method and path are logged: headers carry JWTs
+// and request bodies carry database connection strings with passwords.
+app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
   next();
 });
 

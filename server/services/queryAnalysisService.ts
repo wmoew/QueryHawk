@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { userDbSsl } from '../db/ssl';
 import { trace, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
 export interface QueryAnalysis {
@@ -69,7 +70,7 @@ const runExplainAnalyze = async (
   const { Pool } = pg;
   const userDBPool = new Pool({
     connectionString: uriString,
-    ssl: { rejectUnauthorized: false },
+    ssl: userDbSsl(),
   });
 
   const explainQuery = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sqlQuery}`;

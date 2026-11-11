@@ -109,31 +109,40 @@ cd queryhawk
 
 2. [Download Docker Desktop](https://www.docker.com/products/docker-desktop), install, and open.
 
-3. Configure environment variables
+3. Create your own Supabase project (free tier is fine) at [supabase.com](https://supabase.com). QueryHawk stores users, saved queries and monitored connections there.
 
-- Create .env in the root directory
-- Input and configure environment variables
+   - Open **SQL Editor**, paste the contents of `server/db/migrations.sql`, and run it. The script is safe to run again later.
+   - Under **Connect**, copy the **Session pooler** connection string.
 
-```
-# Example fields (please update with your real values for each one)
-POSTGRES_URI=postgresql://username:password@hostname:port/database
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-JWT_SECRET=your_jwt_secret
-SUPABASE_URI=your_supabase_uri
-```
+4. Create a GitHub OAuth app (GitHub → Settings → Developer settings → OAuth Apps):
 
-4. Start the services
+   - Homepage URL: `http://localhost:5173`
+   - Authorization callback URL: `http://localhost:5173/auth/github/callback`
+
+5. Configure environment variables
 
 ```bash
-docker-compose up -d
+cp .env.example .env
 ```
 
-5. Access the application:
+Fill in `POSTGRES_URI`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `JWT_SECRET`. Postgres TLS certificates are verified by default. Supabase uses its own certificate authority, so either set `PG_SSL_CA` to Supabase's CA certificate (Database settings → SSL Configuration) or, for local development only, set `PG_SSL_REJECT_UNAUTHORIZED=false`.
+
+6. Start the services
+
+```bash
+docker-compose up -d --build
+```
+
+7. Access the application:
 
 ```
-Frontend: http://localhost:5173
+Frontend:      http://localhost:5173
+Grafana:       http://localhost:3001
+Jaeger (traces): http://localhost:16686
+Alloy UI:      http://localhost:12345
 ```
+
+After logging in, paste the connection string of the database you want to monitor. It can be the same Supabase project or any other PostgreSQL database. The backend polls it every 15 seconds, Alloy scrapes the backend and stores the metrics in Mimir, and the Grafana dashboard reads them from there. Backend request traces flow through Alloy to Jaeger.
 
 ## Docker Cheatsheet
 

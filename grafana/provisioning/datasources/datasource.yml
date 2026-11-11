@@ -21,22 +21,6 @@ datasources:
       httpMethod: 'POST' # HTTP method for queries
     editable: true # Allow editing through the UI
     version: 1
-  # PostgreSQL Data Source
-  - name: PostgreSQL
-    type: postgres
-    url: supabase:5432
-    user: postgres # Database user
-    secureJsonData:
-      password: ${POSTGRES_PASSWORD}
-    jsonData:
-      sslmode: 'disable' # Disable SSL for local development
-      maxOpenConns: 100 # Maximum number of open connections
-      maxIdleConns: 100 # Maximum number of idle connections
-      connMaxLifetime: 14400 # Maximum connection lifetime in seconds
-      postgresVersion: 1300 # PostgreSQL version (13.00)
-      timescaledb: false # TimescaleDB support disabled
-    editable: true
-    version: 1
   # Jaeger Data Source for distributed tracing
   - name: Jaeger
     type: jaeger
